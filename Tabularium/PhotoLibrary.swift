@@ -190,19 +190,40 @@ final class PhotoLibrary: ObservableObject {
 
     // MARK: - Image
 
+    /// Charge une image via PhotoKit. **Annulable** : si la `Task` appelante est
+    /// annulée (typiquement une cellule du flux qui sort de l'écran pendant un
+    /// scroll), la requête `PHImageManager` sous-jacente est annulée immédiatement.
+    ///
+    /// Sans cette annulation, un scroll rapide empilait des dizaines de requêtes
+    /// plein écran jamais annulées : PHImageManager (concurrence limitée) les
+    /// vidait toutes à l'arrêt du scroll — décodage + livraison sur le thread
+    /// principal — d'où le gel de quelques secondes « après une pause ».
     func image(for asset: PHAsset, targetSize: CGSize) async -> UIImage? {
-        await withCheckedContinuation { continuation in
-            let options = PHImageRequestOptions()
-            options.deliveryMode = .opportunistic
-            options.isNetworkAccessAllowed = true
-            options.resizeMode = .fast
-            imageManager.requestImage(
-                for: asset, targetSize: targetSize,
-                contentMode: .aspectFill, options: options
-            ) { img, info in
-                let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
-                if !isDegraded { continuation.resume(returning: img) }
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .opportunistic
+        options.isNetworkAccessAllowed = true
+        options.resizeMode = .fast
+
+        let box = ImageRequestBox()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<UIImage?, Never>) in
+                let id = imageManager.requestImage(
+                    for: asset, targetSize: targetSize,
+                    contentMode: .aspectFill, options: options
+                ) { img, info in
+                    // `.opportunistic` livre d'abord une miniature dégradée : on
+                    // attend la pleine résolution (ou le résultat d'annulation).
+                    let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
+                    if isDegraded { return }
+                    box.resumeOnce { continuation.resume(returning: img) }
+                }
+                // Pour une image en cache, le handler peut s'exécuter de façon
+                // synchrone *avant* ce retour : `setID` annule alors aussitôt si
+                // la tâche a déjà été annulée entre-temps.
+                box.setID(id, manager: imageManager)
             }
+        } onCancel: {
+            box.cancel(manager: imageManager)
         }
     }
 
@@ -252,5 +273,50 @@ final class PhotoLibrary: ObservableObject {
         try await PHPhotoLibrary.shared().performChanges {
             PHAssetChangeRequest.deleteAssets(assets as NSArray)
         }
+    }
+}
+
+/// Coordonne une requête `PHImageManager` annulable (cf. `PhotoLibrary.image`).
+///
+/// Trois courses possibles à protéger sous un même verrou :
+/// - le handler de résultat (thread principal) vs `onCancel` (thread quelconque) ;
+/// - une reprise unique de la continuation (`withCheckedContinuation` exige
+///   exactement un `resume`) ;
+/// - une annulation arrivée *avant* que l'identifiant de requête soit connu
+///   (image en cache → handler synchrone, ou annulation très précoce).
+private final class ImageRequestBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var id: PHImageRequestID?
+    private var resumed = false
+    private var cancelled = false
+
+    /// Enregistre l'ID de requête ; si l'annulation est déjà arrivée, annule aussitôt.
+    func setID(_ newID: PHImageRequestID, manager: PHImageManager) {
+        lock.lock()
+        if cancelled {
+            lock.unlock()
+            manager.cancelImageRequest(newID)
+            return
+        }
+        id = newID
+        lock.unlock()
+    }
+
+    /// Reprend la continuation au plus une fois (les livraisons suivantes sont ignorées).
+    func resumeOnce(_ resume: () -> Void) {
+        lock.lock()
+        guard !resumed else { lock.unlock(); return }
+        resumed = true
+        lock.unlock()
+        resume()
+    }
+
+    /// Annule la requête en vol (l'ID peut ne pas être encore connu : géré par `setID`).
+    func cancel(manager: PHImageManager) {
+        lock.lock()
+        cancelled = true
+        let toCancel = id
+        lock.unlock()
+        if let toCancel { manager.cancelImageRequest(toCancel) }
     }
 }

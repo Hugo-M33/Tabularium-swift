@@ -100,6 +100,10 @@ struct SorterScreen: View {
                          resetDate: credits.nextReset,
                          onWatchAd: (isUnlimited || !consent.canRequestAds) ? nil : { watchAdFromReview() }) {
                 await commitChanges()
+                // Premium : la revue déclenchée au bout du lot (100ᵉ) une fois
+                // validée → on enchaîne sur un nouveau lot. (Sans incidence pour
+                // les autres cas : `isFinished` n'est vrai qu'en fin de lot.)
+                if isUnlimited && session.isFinished { loadNextBatch() }
             }
         }
         .task { if consent.canRequestAds { ads.load() } }
@@ -114,8 +118,18 @@ struct SorterScreen: View {
         }
         .onDisappear { prefetcher.reset(in: library) }
         .onChange(of: session.isFinished) { _, finished in
-            // Premium : enchaîne automatiquement sur 100 nouvelles photos.
-            if finished && isUnlimited { loadNextBatch() }
+            // Premium : au bout du lot (100ᵉ photo), on FORCE la revue des décisions
+            // en attente avant d'enchaîner. Sans ce garde-fou, `loadNextBatch()`
+            // appelait `session.start(...)` qui réinitialise `decisions`/`undoStack`
+            // → les suppressions et classements non validés étaient perdus.
+            // S'il n'y a rien à valider, on enchaîne directement sur un nouveau lot.
+            guard finished, isUnlimited else { return }
+            if session.pendingActionCount > 0 {
+                reviewOutOfSwipes = false
+                showReview = true
+            } else {
+                loadNextBatch()
+            }
         }
         .alert("alert.error.title", isPresented: .constant(deleteError != nil)) {
             Button("common.ok") { deleteError = nil }
