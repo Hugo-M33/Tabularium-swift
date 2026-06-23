@@ -64,6 +64,10 @@ struct SorterScreen: View {
         }
         .navigationTitle(navTitle)
         .navigationBarTitleDisplayMode(.inline)
+        // Dans un dossier, on remplace le bouton retour système (qui afficherait
+        // « Tri photo ») par un bouton retour personnalisé portant le nom du
+        // dossier — voir `toolbarContent`.
+        .navigationBarBackButtonHidden(isAlbumSource)
         .toolbar { toolbarContent }
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -120,6 +124,9 @@ struct SorterScreen: View {
         if let source = session.source, source.isAlbum { return source.title }
         return NSLocalizedString("nav.title", comment: "")
     }
+
+    /// Vrai quand la source de tri est un dossier/album (titre = nom du dossier).
+    private var isAlbumSource: Bool { session.source?.isAlbum == true }
 
     // MARK: - Contenu
 
@@ -309,6 +316,15 @@ struct SorterScreen: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        if isAlbumSource {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { dismiss() } label: {
+                    Label(navTitle, systemImage: "chevron.backward")
+                        .labelStyle(.titleAndIcon)
+                        .lineLimit(1)
+                }
+            }
+        }
         ToolbarItem(placement: .topBarLeading) {
             if isUnlimited {
                 Label("status.unlimited", systemImage: "infinity")
