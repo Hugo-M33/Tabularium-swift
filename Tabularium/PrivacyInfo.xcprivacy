@@ -2,15 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- L'app elle-même n'effectue aucun tracking : c'est le SDK Google Mobile
-	     Ads qui contacte les domaines de tracking et les déclare dans SON
-	     manifest embarqué (NSPrivacyTracking=true + domaines). Apple fusionne
-	     tous les manifests à la soumission. Si NSPrivacyTracking est true ici,
-	     NSPrivacyTrackingDomains doit être non vide (sinon ITMS-91064). -->
+	<!-- NSPrivacyTracking=false au niveau du manifest : Apple n'autorise pas
+	     NSPrivacyTracking=true sans au moins un domaine dans
+	     NSPrivacyTrackingDomains (sinon ITMS-91064), et Google ne publie pas de
+	     liste de domaines de tracking pour le SDK Mobile Ads. On NE déclare donc
+	     PAS la clé NSPrivacyTrackingDomains (même vide, sa présence peut suffire
+	     à déclencher le validateur). L'usage réel de l'IDFA pour la pub se
+	     déclare dans le questionnaire « App Privacy » d'App Store Connect. -->
 	<key>NSPrivacyTracking</key>
 	<false/>
-	<key>NSPrivacyTrackingDomains</key>
-	<array/>
 	<!-- Aucune collecte de données par l'app elle-même (pas de backend ;
 	     CloudKit dormant). La collecte du SDK pub est déclarée dans SON manifest. -->
 	<key>NSPrivacyCollectedDataTypes</key>

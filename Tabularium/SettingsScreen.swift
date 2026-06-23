@@ -15,13 +15,22 @@ struct SettingsScreen: View {
     @State private var showPaywall = false
     @State private var confirmReset = false
     @State private var showOnboarding = false
+    @State private var showOfferCode = false
+    @State private var testCodeInput = ""
+    @State private var testCodeFeedback: TestCodeFeedback?
 
     private var isUnlimited: Bool { subscription.isUnlimited }
+
+    private enum TestCodeFeedback { case success, wrongCode }
 
     var body: some View {
         NavigationStack {
             Form {
                 subscriptionSection
+
+                if !isUnlimited {
+                    promoSection
+                }
 
                 if isUnlimited {
                     shortcutsSection
@@ -45,6 +54,12 @@ struct SettingsScreen: View {
                 }
             }
             .sheet(isPresented: $showPaywall) { PaywallView() }
+            .offerCodeRedemption(isPresented: $showOfferCode) { result in
+                if case .failure(let error) = result {
+                    print("StoreKit: rédemption offer code échouée — \(error)")
+                }
+                Task { await subscription.refreshEntitlements() }
+            }
             .fullScreenCover(isPresented: $showOnboarding) {
                 OnboardingView { showOnboarding = false }
             }
@@ -72,6 +87,50 @@ struct SettingsScreen: View {
                 Button("settings.manage") { Task { await manageSubscriptions() } }
             }
             Button("paywall.restore") { Task { await subscription.restore() } }
+        }
+    }
+
+    /// Codes promo : feuille officielle Apple (Offer Codes) + champ de code de
+    /// test interne, ce dernier visible seulement en Debug/TestFlight.
+    private var promoSection: some View {
+        Section {
+            Button("settings.offercode") { showOfferCode = true }
+
+            if SubscriptionStore.allowsTestPromo {
+                HStack {
+                    TextField("settings.testcode.placeholder", text: $testCodeInput)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                    Button("settings.testcode.validate") { redeemTestCode() }
+                        .disabled(testCodeInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                if let testCodeFeedback {
+                    switch testCodeFeedback {
+                    case .success:
+                        Label("settings.testcode.success", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    case .wrongCode:
+                        Label("settings.testcode.wrong", systemImage: "xmark.circle.fill")
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+        } header: {
+            Text("settings.promo")
+        } footer: {
+            if SubscriptionStore.allowsTestPromo {
+                Text("settings.testcode.footer")
+            }
+        }
+    }
+
+    private func redeemTestCode() {
+        switch subscription.redeemTestCode(testCodeInput) {
+        case .success:
+            testCodeFeedback = .success
+            testCodeInput = ""
+        case .wrongCode, .notAvailable:
+            testCodeFeedback = .wrongCode
         }
     }
 

@@ -14,10 +14,20 @@ final class SubscriptionStore: ObservableObject {
     /// 🔑 Remplace par ton identifiant produit App Store Connect.
     static let productID = "com.tonentreprise.tabularium.unlimited.monthly"
 
+    /// 🎟️ Code de test interne pour débloquer le premium en TestFlight (sans
+    /// vrai achat). N'a AUCUN effet en build App Store production (voir
+    /// `allowsTestPromo`). Change-le pour ce que tu veux.
+    static let testPromoCode = "TABU-VIP"
+
+    private static let promoUnlockedKey = "promo.unlocked"
+
     @Published private(set) var product: Product?
     /// Droit réel (entitlement StoreKit).
     @Published private(set) var entitled = false
     @Published private(set) var purchaseInProgress = false
+    /// Premium débloqué via le code de test interne (persisté). Ne compte que
+    /// si `allowsTestPromo` est vrai → inerte en production.
+    @Published private(set) var promoUnlocked = UserDefaults.standard.bool(forKey: SubscriptionStore.promoUnlockedKey)
 
     #if DEBUG
     /// 🛠️ DEV : force le premium pour tester (persisté). Compilé uniquement en
@@ -27,13 +37,40 @@ final class SubscriptionStore: ObservableObject {
     }
     #endif
 
-    /// Premium effectif = abonnement actif (+ override de dev en build Debug).
-    var isUnlimited: Bool {
+    /// Le code de test n'est honoré qu'en build Debug ou en TestFlight (reçu
+    /// « sandbox »). En App Store production il est totalement inerte, donc
+    /// aucun risque de premium gratuit pour les vrais utilisateurs.
+    static var allowsTestPromo: Bool {
         #if DEBUG
-        return entitled || debugForcePremium
+        return true
         #else
-        return entitled
+        return Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
         #endif
+    }
+
+    /// Premium effectif = abonnement actif (+ code de test en Debug/TestFlight,
+    /// + override de dev en build Debug).
+    var isUnlimited: Bool {
+        if entitled { return true }
+        if promoUnlocked && Self.allowsTestPromo { return true }
+        #if DEBUG
+        if debugForcePremium { return true }
+        #endif
+        return false
+    }
+
+    /// Résultat de la saisie d'un code de test interne.
+    enum RedeemResult { case success, wrongCode, notAvailable }
+
+    /// Valide un code de test interne et débloque le premium si correct.
+    /// Sans effet hors Debug/TestFlight (`allowsTestPromo`).
+    func redeemTestCode(_ raw: String) -> RedeemResult {
+        guard Self.allowsTestPromo else { return .notAvailable }
+        let code = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard code == Self.testPromoCode.uppercased() else { return .wrongCode }
+        promoUnlocked = true
+        UserDefaults.standard.set(true, forKey: Self.promoUnlockedKey)
+        return .success
     }
 
     private var updatesTask: Task<Void, Never>?
