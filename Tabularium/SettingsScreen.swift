@@ -37,6 +37,10 @@ struct SettingsScreen: View {
                     gesturesSection
                 }
 
+                if SubscriptionStore.allowsTestPromo && isUnlimited && !subscription.entitled {
+                    testRevertSection
+                }
+
                 sortingSection
                 helpSection
                 if consent.isPrivacyOptionsRequired { privacySection }
@@ -131,6 +135,19 @@ struct SettingsScreen: View {
             testCodeInput = ""
         case .wrongCode, .notAvailable:
             testCodeFeedback = .wrongCode
+        }
+    }
+
+    /// Test uniquement (Debug/TestFlight) : repasse en version gratuite pour
+    /// revérifier le parcours non-payant. Masqué en production.
+    private var testRevertSection: some View {
+        Section {
+            Button("settings.testrevert", role: .destructive) {
+                subscription.lockPremiumForTesting()
+                testCodeFeedback = nil
+            }
+        } footer: {
+            Text("settings.testrevert.footer")
         }
     }
 

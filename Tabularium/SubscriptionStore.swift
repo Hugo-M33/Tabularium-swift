@@ -73,6 +73,17 @@ final class SubscriptionStore: ObservableObject {
         return .success
     }
 
+    /// Repasse en version gratuite pour le test : annule le code de test (et,
+    /// en build Debug, l'override de dev). Sans effet sur un vrai abonnement
+    /// StoreKit (`entitled`), qui ne peut être révoqué que par Apple.
+    func lockPremiumForTesting() {
+        promoUnlocked = false
+        UserDefaults.standard.set(false, forKey: Self.promoUnlockedKey)
+        #if DEBUG
+        debugForcePremium = false
+        #endif
+    }
+
     private var updatesTask: Task<Void, Never>?
 
     init() {

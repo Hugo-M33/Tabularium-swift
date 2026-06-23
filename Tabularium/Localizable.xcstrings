@@ -1829,6 +1829,38 @@
         }
       }
     },
+    "settings.testrevert": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revert to free version"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repasser en version gratuite"
+          }
+        }
+      }
+    },
+    "settings.testrevert.footer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test only (TestFlight): disables the test unlock so you can check the free experience. Not available in the App Store release."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test uniquement (TestFlight) : désactive le déblocage de test pour vérifier l’expérience gratuite. Indisponible dans la version App Store."
+          }
+        }
+      }
+    },
     "settings.title": {
       "localizations": {
         "en": {

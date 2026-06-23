@@ -35,6 +35,22 @@ static let testPromoCode = "TABU-VIP"
 > Change cette valeur quand tu veux. La comparaison ignore la casse et les
 > espaces autour.
 
+### Revenir en version gratuite (test)
+
+Une fois le Premium débloqué via le code de test, un bouton **« Repasser en
+version gratuite »** apparaît dans Réglages (section dédiée). Il appelle
+`SubscriptionStore.lockPremiumForTesting()`, qui annule le code de test (et, en
+Debug, l'override `debugForcePremium`).
+
+Ce bouton n'apparaît que si :
+
+- `allowsTestPromo` est vrai (Debug/TestFlight), **et**
+- l'utilisateur est illimité, **et**
+- il **n'a pas** de vrai abonnement StoreKit (`entitled`) — un vrai abonnement
+  ne peut être révoqué que par Apple, pas par l'app.
+
+Il est donc absent en production App Store.
+
 ### Pourquoi c'est sans risque en production
 
 Le champ et le code ne sont honorés que si `SubscriptionStore.allowsTestPromo`
