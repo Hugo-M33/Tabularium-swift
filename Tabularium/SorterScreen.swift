@@ -160,6 +160,15 @@ struct SorterScreen: View {
         return cards
     }
 
+    /// Léger angle d'inclinaison (-4°…+4°) appliqué aux cartes en arrière-plan
+    /// pour conserver l'effet de pile maintenant que les cartes épousent la forme
+    /// de la photo. Dérivé de façon déterministe de l'`id` (et non d'un hash aléatoire
+    /// resemé à chaque lancement) pour rester stable d'un rendu à l'autre.
+    private func tiltAngle(for id: String) -> Double {
+        let hash = id.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xffff }
+        return Double(hash % 9) - 4
+    }
+
     private var cardStack: some View {
         VStack(spacing: 0) {
             ZStack {
@@ -167,6 +176,7 @@ struct SorterScreen: View {
                     cardView(for: entry)
                         .scaleEffect(entry.isTop ? 1 : 0.94)
                         .opacity(entry.isTop ? 1 : 0.6)
+                        .rotationEffect(.degrees(entry.isTop ? 0 : tiltAngle(for: entry.id)))
                         .allowsHitTesting(entry.isTop)
                         .animation(.easeOut(duration: 0.22), value: entry.isTop)
                 }

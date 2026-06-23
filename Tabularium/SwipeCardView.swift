@@ -9,47 +9,73 @@ struct SwipeCardView: View {
 
     @State private var image: UIImage?
     @State private var translation: CGSize = .zero
-    @State private var isRemoving = false
 
     /// Seuil de validation du swipe.
     private let threshold: CGFloat = 110
 
+    /// Ratio largeur / hauteur de la photo, lu instantanément depuis l'asset
+    /// (avant le chargement de l'image) pour dimensionner la carte sans
+    /// recalcul ni clignotement. Repli 3:4 si l'asset n'expose pas ses dimensions.
+    private var aspectRatio: CGFloat {
+        guard asset.pixelWidth > 0, asset.pixelHeight > 0 else { return 3.0 / 4.0 }
+        return CGFloat(asset.pixelWidth) / CGFloat(asset.pixelHeight)
+    }
+
     var body: some View {
         GeometryReader { geo in
+            // Carte à la forme exacte de la photo, centrée dans une zone de geste
+            // plein cadre : on peut attraper et lancer la carte n'importe où, même
+            // quand la photo est courte (paysage) ou étroite (portrait).
+            let card = cardSize(in: geo.size)
             ZStack {
-                cardBackground
-                if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
-                } else {
-                    ProgressView()
-                        .controlSize(.large)
-                        .tint(.secondary)
-                }
-
-                // Étiquettes GARDER / SUPPRIMER qui apparaissent au swipe.
-                decisionLabels
+                Color.clear // zone de geste (transparente, plein cadre)
+                photoCard
+                    .frame(width: card.width, height: card.height)
             }
             .frame(width: geo.size.width, height: geo.size.height)
-            .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.6), lineWidth: 1)
-            )
-            .shadow(color: Palette.primary.opacity(0.12), radius: 24, y: 12)
+            .contentShape(Rectangle())
             .offset(translation)
             .rotationEffect(.degrees(Double(translation.width / 18)))
             .gesture(dragGesture(in: geo.size))
             .task(id: asset.localIdentifier) {
                 let scale = UIScreen.main.scale
-                let size = CGSize(width: geo.size.width * scale,
-                                  height: geo.size.height * scale)
+                let size = CGSize(width: card.width * scale, height: card.height * scale)
                 image = await library.image(for: asset, targetSize: size)
             }
         }
+    }
+
+    /// Plus grand rectangle au ratio de la photo qui tient dans `bounds`.
+    private func cardSize(in bounds: CGSize) -> CGSize {
+        guard bounds.width > 0, bounds.height > 0 else { return bounds }
+        let boundsRatio = bounds.width / bounds.height
+        return aspectRatio > boundsRatio
+            ? CGSize(width: bounds.width, height: bounds.width / aspectRatio)   // limitée par la largeur
+            : CGSize(width: bounds.height * aspectRatio, height: bounds.height) // limitée par la hauteur
+    }
+
+    /// Carte arrondie à la forme de la photo : fond, image entière, bordure, ombre.
+    private var photoCard: some View {
+        ZStack {
+            cardBackground
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                ProgressView()
+                    .controlSize(.large)
+                    .tint(.secondary)
+            }
+            // Étiquettes GARDER / SUPPRIMER qui apparaissent au swipe.
+            decisionLabels
+        }
+        .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.6), lineWidth: 1)
+        )
+        .shadow(color: Palette.primary.opacity(0.12), radius: 24, y: 12)
     }
 
     private var cardBackground: some View {

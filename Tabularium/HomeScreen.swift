@@ -293,22 +293,31 @@ private struct AlbumThumbnail: View {
     @State private var image: UIImage?
 
     var body: some View {
-        ZStack {
-            Palette.surfaceContainer
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Image(systemName: "photo")
-                    .font(.largeTitle)
-                    .foregroundStyle(Palette.outline)
+        // On mesure la vignette pour demander une image au ratio réel de la carte
+        // (paysage), et non un carré 600×600 : un fetch carré renvoyait un bitmap
+        // hors-ratio qui paraissait étiré une fois affiché.
+        GeometryReader { geo in
+            ZStack {
+                Palette.surfaceContainer
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Image(systemName: "photo")
+                        .font(.largeTitle)
+                        .foregroundStyle(Palette.outline)
+                }
             }
-        }
-        .task(id: asset?.localIdentifier) {
-            guard let asset else { return }
-            image = await library.image(for: asset,
-                                        targetSize: CGSize(width: 600, height: 600))
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
+            .task(id: asset?.localIdentifier) {
+                guard let asset else { return }
+                let scale = UIScreen.main.scale
+                let target = CGSize(width: geo.size.width * scale,
+                                    height: geo.size.height * scale)
+                image = await library.image(for: asset, targetSize: target)
+            }
         }
     }
 }
