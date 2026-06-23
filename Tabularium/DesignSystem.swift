@@ -203,17 +203,25 @@ extension Font {
 // MARK: - Press feedback ("squish")
 
 struct SquishButtonStyle: ButtonStyle {
+    /// Ajoute un léger retour haptique à l'appui (en plus du squish visuel).
+    var haptic: Bool = false
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.spring(response: 0.25, dampingFraction: 0.6),
                        value: configuration.isPressed)
+            .sensoryFeedback(trigger: configuration.isPressed) { _, pressed in
+                haptic && pressed ? .impact(weight: .light) : nil
+            }
     }
 }
 
 extension ButtonStyle where Self == SquishButtonStyle {
     /// Plain button with the design system's tactile squish-on-press feedback.
     static var squish: SquishButtonStyle { SquishButtonStyle() }
+    /// Squish visuel + léger retour haptique à l'appui.
+    static func squish(haptic: Bool) -> SquishButtonStyle { SquishButtonStyle(haptic: haptic) }
 }
 
 // MARK: - Primary / secondary buttons

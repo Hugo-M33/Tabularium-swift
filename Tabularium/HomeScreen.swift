@@ -181,7 +181,7 @@ struct HomeScreen: View {
             .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
             .shadow(color: Palette.primary.opacity(0.25), radius: 16, y: 6)
         }
-        .buttonStyle(.squish)
+        .buttonStyle(.squish(haptic: true))
     }
 
     private func albumCard(_ album: PhotoLibrary.Album) -> some View {
@@ -223,7 +223,7 @@ struct HomeScreen: View {
             .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
             .shadow(color: Palette.primary.opacity(0.06), radius: 20, y: 4)
         }
-        .buttonStyle(.squish)
+        .buttonStyle(.squish(haptic: true))
     }
 
     private var permissionDenied: some View {

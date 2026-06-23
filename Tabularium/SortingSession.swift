@@ -2,6 +2,13 @@ import Combine
 import Photos
 import SwiftUI
 
+/// Direction d'une action de tri en mode cartes. Sert à la fois à router le geste
+/// (gauche/droite/haut) et à rejouer la **transition d'entrée** à l'annulation :
+/// la carte revient en glissant depuis le bord par lequel elle était sortie.
+enum SwipeDirection {
+    case left, right, up, down
+}
+
 /// Contexte de tri **partagé** entre la vue cartes et la vue flux.
 ///
 /// Les deux modes lisent et écrivent le même curseur (`index`) et les mêmes
@@ -59,6 +66,27 @@ final class SortingSession: ObservableObject {
     @Published private(set) var decisions: [String: Decision] = [:]
     @Published private(set) var favorites: Set<String> = []
     @Published private(set) var source: Source?
+
+    /// Une action de tri annulable (mode cartes). On retient l'identifiant de la
+    /// photo, la direction de sortie (pour l'animation de retour) et si **cette**
+    /// action a posé le favori — afin de ne dé-favoriser à l'annulation que ce
+    /// qu'on a réellement ajouté, jamais un favori préexistant.
+    struct UndoStep: Equatable {
+        let id: String
+        let direction: SwipeDirection
+        let addedFavorite: Bool
+    }
+
+    /// Résultat d'un retour en arrière, à appliquer côté écran (crédit + favori).
+    struct Undo {
+        let asset: PHAsset
+        let direction: SwipeDirection
+        let removeFavorite: Bool
+    }
+
+    /// Pile des actions annulables du batch courant. Vidée au démarrage d'un batch
+    /// et **après un commit** : on ne peut pas annuler une décision déjà appliquée.
+    @Published private(set) var undoStack: [UndoStep] = []
 
     // Stats globales.
     @Published private(set) var totalCount: Int = 0
