@@ -245,6 +245,22 @@
         }
       }
     },
+    "card.favorite": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FAVORITE"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FAVORI"
+          }
+        }
+      }
+    },
     "card.keep": {
       "localizations": {
         "en": {

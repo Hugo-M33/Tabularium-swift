@@ -26,6 +26,10 @@ struct SorterScreen: View {
     @State private var cardSize: CGSize = .zero
     /// Texte du toast « espace libéré » après un commit (nil = masqué).
     @State private var freedToast: String?
+    /// Carte qui doit rejouer une transition d'entrée (retour arrière) et le bord
+    /// par lequel elle glisse. `reentryID` cible la seule carte concernée.
+    @State private var reentryID: String?
+    @State private var reentryEdge: SwipeDirection?
 
     /// Photos en aval à garder chaudes en cache (≥ curr+10).
     private let prefetchAhead = 12
@@ -211,9 +215,13 @@ struct SorterScreen: View {
     private func cardView(for entry: CardEntry) -> some View {
         switch entry.item {
         case .photo(let asset):
-            SwipeCardView(asset: asset, library: library) { right in
-                if entry.isTop { performCardSwipe(rightDirection: right) }
-            }
+            SwipeCardView(
+                asset: asset,
+                library: library,
+                onSwipe: { direction in if entry.isTop { handleSwipe(direction) } },
+                onTapBack: { if entry.isTop { goBack() } },
+                entryEdge: entry.id == reentryID ? reentryEdge : nil
+            )
         case .ad(let n):
             NativeAdSlot(slot: n, card: true)
         }
@@ -372,6 +380,16 @@ struct SorterScreen: View {
 
     // MARK: - Logique
 
+    /// Route un swipe de carte vers l'action correspondante.
+    private func handleSwipe(_ direction: SwipeDirection) {
+        switch direction {
+        case .up:    performCardFavorite()
+        case .right: performCardSwipe(rightDirection: true)
+        case .left:  performCardSwipe(rightDirection: false)
+        case .down:  break
+        }
+    }
+
     /// Swipe de carte : action de la direction (configurable), repli sur
     /// garder/supprimer si la direction n'a pas d'action assignée.
     private func performCardSwipe(rightDirection: Bool) {
@@ -380,19 +398,64 @@ struct SorterScreen: View {
         let action: GestureSettings.Action = (configured == .none)
             ? (rightDirection ? .keep : .delete) : configured
         guard performAction(action, on: asset) else { return }
+        session.pushUndo(id: asset.localIdentifier,
+                         direction: rightDirection ? .right : .left, addedFavorite: false)
+        reentryID = nil
         session.advance()
         if !isUnlimited && credits.remaining == 0 && !session.isFinished {
             presentOutOfSwipes()
         }
     }
 
+    /// Swipe vers le haut : marque la photo favorite (« superlike »), la garde, et
+    /// passe à la suivante. Le favori est écrit dans PhotoKit s'il est nouveau.
+    private func performCardFavorite() {
+        guard let asset = session.currentAsset else { return }
+        guard credits.canSwipe(isUnlimited: isUnlimited) else { presentOutOfSwipes(); return }
+        credits.consume(isUnlimited: isUnlimited)
+        let added = session.recordFavoriteKeep(asset)
+        if added { Task { try? await library.setFavorite(asset, true) } }
+        session.pushUndo(id: asset.localIdentifier, direction: .up, addedFavorite: added)
+        reentryID = nil
+        session.advance()
+        if !isUnlimited && credits.remaining == 0 && !session.isFinished {
+            presentOutOfSwipes()
+        }
+    }
+
+    /// Retour en arrière (tap sur la carte) : annule la dernière action — décision
+    /// effacée, crédit rendu, favori retiré si on l'avait posé — et fait revenir la
+    /// carte précédente en glissant depuis son bord de sortie. No-op si rien à annuler.
+    private func goBack() {
+        guard let undo = session.goBack() else { return }
+        credits.refund(isUnlimited: isUnlimited)
+        if undo.removeFavorite { Task { try? await library.setFavorite(undo.asset, false) } }
+        reentryEdge = undo.direction
+        reentryID = undo.asset.localIdentifier
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
     /// Bouton d'action (✕ / dossier / ♥) sous la carte.
     private func performButton(_ action: GestureSettings.Action) {
         guard let asset = session.currentAsset else { return }
         guard performAction(action, on: asset) else { return }
+        session.pushUndo(id: asset.localIdentifier,
+                         direction: undoDirection(for: action), addedFavorite: false)
+        reentryID = nil
         session.advance()
         if !isUnlimited && credits.remaining == 0 && !session.isFinished {
             presentOutOfSwipes()
+        }
+    }
+
+    /// Bord de sortie associé à une action, pour l'animation de retour : garder
+    /// sort à droite, supprimer à gauche, classer vers le bas.
+    private func undoDirection(for action: GestureSettings.Action) -> SwipeDirection {
+        switch action {
+        case .keep:   return .right
+        case .delete: return .left
+        case .folder: return .down
+        case .none:   return .right
         }
     }
 

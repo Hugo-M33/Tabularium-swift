@@ -115,6 +115,7 @@ final class SortingSession: ObservableObject {
         self.totalCount = totalCount
         self.index = 0
         self.decisions = [:]
+        self.undoStack = []
         self.favorites = Set(batch.filter(\.isFavorite).map(\.localIdentifier))
         self.items = Self.buildItems(batch, adInterval: adInterval)
     }
@@ -187,6 +188,39 @@ final class SortingSession: ObservableObject {
         favorites.insert(id); return true
     }
 
+    /// Swipe vers le haut (« superlike ») : garde la photo **et** la marque favorite.
+    /// Renvoie `true` si le favori a été nouvellement ajouté → l'écran écrit alors
+    /// la valeur dans PhotoKit (et l'annulation pourra le retirer).
+    @discardableResult
+    func recordFavoriteKeep(_ asset: PHAsset) -> Bool {
+        let added = !favorites.contains(asset.localIdentifier)
+        favorites.insert(asset.localIdentifier)
+        setDecision(.kept, asset)
+        return added
+    }
+
+    // MARK: - Historique d'annulation (retour en arrière, mode cartes)
+
+    var canGoBack: Bool { !undoStack.isEmpty }
+
+    /// Empile une action annulable après l'avoir appliquée et le curseur avancé.
+    func pushUndo(id: String, direction: SwipeDirection, addedFavorite: Bool) {
+        undoStack.append(UndoStep(id: id, direction: direction, addedFavorite: addedFavorite))
+    }
+
+    /// Annule la dernière action : ramène le curseur sur la photo concernée (via son
+    /// identifiant, robuste à l'interleaving des pubs), efface sa décision et retire
+    /// le favori si c'est nous qui l'avions posé. `nil` si la pile est vide.
+    @discardableResult
+    func goBack() -> Undo? {
+        guard let step = undoStack.popLast() else { return nil }
+        guard let idx = itemIndex(ofID: step.id), let asset = items[idx].asset else { return nil }
+        if step.addedFavorite { favorites.remove(step.id) }
+        recordUndo(asset)
+        index = idx
+        return Undo(asset: asset, direction: step.direction, removeFavorite: step.addedFavorite)
+    }
+
     // MARK: - Corbeille (photos du batch marquées à supprimer)
 
     var keptAssets: [PHAsset] {
@@ -230,6 +264,8 @@ final class SortingSession: ObservableObject {
         }
         ids.forEach { decisions[$0] = nil }
         index = max(0, min(index - removedBefore, items.count))
+        // Décisions appliquées : on ne peut plus les annuler.
+        undoStack.removeAll()
     }
 
     // MARK: - Stats

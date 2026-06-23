@@ -236,6 +236,16 @@ final class PhotoLibrary: ObservableObject {
         }
     }
 
+    /// Fixe explicitement l'état favori (idempotent) : utilisé par le swipe vers le
+    /// haut et son annulation, où l'on veut **poser** ou **retirer** le favori sans
+    /// dépendre de l'état courant (contrairement à `toggleFavorite`).
+    func setFavorite(_ asset: PHAsset, _ value: Bool) async throws {
+        guard asset.isFavorite != value else { return }
+        try await PHPhotoLibrary.shared().performChanges {
+            PHAssetChangeRequest(for: asset).isFavorite = value
+        }
+    }
+
     /// Supprime les photos données (iOS affiche sa propre alerte de confirmation).
     func deleteAssets(_ assets: [PHAsset]) async throws {
         guard !assets.isEmpty else { return }

@@ -109,6 +109,15 @@ final class SwipeCreditsStore: ObservableObject {
         defaults.set(remaining, forKey: Key.remaining)
     }
 
+    /// Rend un swipe consommé lors d'un retour en arrière (annulation).
+    /// Ne fait rien si illimité. Plafonné au même seuil que la pub récompensée.
+    func refund(isUnlimited: Bool) {
+        guard !isUnlimited else { return }
+        rolloverIfNeeded()
+        remaining = min(Self.dailyLimit * 10, remaining + 1)
+        defaults.set(remaining, forKey: Key.remaining)
+    }
+
     /// Crédit accordé après une pub récompensée vérifiée.
     func grantAdReward() {
         rolloverIfNeeded()
