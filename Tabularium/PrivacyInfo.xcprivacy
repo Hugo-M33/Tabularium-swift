@@ -2,12 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- L'app utilise l'IDFA via Google Mobile Ads pour des pubs personnalisées
-	     (prompt ATT au lancement). -->
+	<!-- L'app elle-même n'effectue aucun tracking : c'est le SDK Google Mobile
+	     Ads qui contacte les domaines de tracking et les déclare dans SON
+	     manifest embarqué (NSPrivacyTracking=true + domaines). Apple fusionne
+	     tous les manifests à la soumission. Si NSPrivacyTracking est true ici,
+	     NSPrivacyTrackingDomains doit être non vide (sinon ITMS-91064). -->
 	<key>NSPrivacyTracking</key>
-	<true/>
-	<!-- Domaines de tracking : fournis par le manifest embarqué du SDK
-	     Google Mobile Ads ; rien à déclarer au niveau de l'app. -->
+	<false/>
 	<key>NSPrivacyTrackingDomains</key>
 	<array/>
 	<!-- Aucune collecte de données par l'app elle-même (pas de backend ;
