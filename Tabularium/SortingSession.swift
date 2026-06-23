@@ -65,8 +65,13 @@ final class SortingSession: ObservableObject {
     /// Photos déjà triées (toutes sessions confondues), persistées.
     @Published private(set) var sortedIDs: Set<String>
 
-    private let defaults = UserDefaults.standard
     private static let sortedKey = "sorting.sortedIDs"
+
+    /// File d'attente dédiée à l'écriture disque, **hors thread principal**.
+    /// `sortedIDs` est cumulatif (toutes sessions) : sa sérialisation grossit avec
+    /// l'usage, et `persist()` est appelé à chaque photo qui sort de l'écran. Faire
+    /// l'encodage sur le main bloquerait le défilement lors d'un swipe rapide.
+    private let persistQueue = DispatchQueue(label: "com.tabularium.sorting.persist", qos: .utility)
 
     init() {
         sortedIDs = Set(UserDefaults.standard.stringArray(forKey: Self.sortedKey) ?? [])
@@ -226,6 +231,12 @@ final class SortingSession: ObservableObject {
         if sortedIDs.remove(id) != nil { persist() }
     }
     private func persist() {
-        defaults.set(Array(sortedIDs), forKey: Self.sortedKey)
+        // Snapshot léger (copie de références) pris sur le main, puis encodage +
+        // écriture déportés : le thread principal ne paie jamais la sérialisation.
+        let snapshot = Array(sortedIDs)
+        let key = Self.sortedKey
+        persistQueue.async {
+            UserDefaults.standard.set(snapshot, forKey: key)
+        }
     }
 }
